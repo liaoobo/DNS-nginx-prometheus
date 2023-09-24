@@ -1,0 +1,40 @@
+- hosts: nginx #nginx负载均衡服务器
+  remote_user: root
+  tasks:
+  - name: install nginx #使用脚本一键编译安装nginx
+    script:  /root/onekey_install_nginx.sh
+  - name: install keepalived  #负载均衡器中安装keepalived，实现高可用
+    yum: name=keepalived state=installed
+
+- hosts: web #web集群
+  remote_user: root
+  tasks:  
+  - name: install nginx  #web主机组中编译安装部署nginx集群
+    script:  /root/onekey_install_nginx.sh #调用本地一键安装部署nginx脚本，在远程主机上编译安装
+  - name: install nfs  #web主机组中安装nfs，访问nfs服务器，实现数据同源
+    yum: name=nfs-utils state=installed
+  - name: start nfs  #启动nfs
+    shell: service nfs start
+    tags: start_nfs  #打标签，方便后面直接跳转到此处批量启动nfs
+
+- hosts: dns #dns服务器
+  remote_user: root
+  tasks:
+  - name: install dns
+    yum: name=bind.* state=installed
+
+- hosts: nfs #NFS服务器
+  remote_user: root
+  tasks:
+  - name: install nfs
+    yum: name=nfs-utils state=installed
+
+- hosts: web nginx #调用本地node_exporter脚本，批量安装部署node_exporter，为prometheus采集数据
+  remote_user: root
+  tasks: 
+  - name: install node_exporters
+    script: /root/node_exporter.sh
+    tags: install_exporter
+  - name: start node_exporters  #后台运行node_exporters
+    shell: nohup node_exporter --web.listen-address 0.0.0.0:8090 &
+    tags: start_exporters  #打标签，方便后面直接跳转到此处批量启动node_exporters
